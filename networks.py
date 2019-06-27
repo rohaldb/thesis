@@ -25,7 +25,7 @@ class AnchorNet(nn.Module):
         self.biases = nn.Parameter((aggregate/train_data.shape[0]).reshape(-1, 1))
 
     def forward(self, x):
-        return torch.norm(x.t() - anchors, 2, 1).reshape(-1, 1) - biases
+        return torch.norm(x.t() - self.anchors, 2, 1).reshape(-1, 1) - self.biases
 
     def get_embedding(self, x):
         return self.forward(x)
