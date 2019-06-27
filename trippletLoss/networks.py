@@ -1,10 +1,18 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 
 class AnchorNet(nn.Module):
 
-    def __init__(self, train_data, INPUT_D, OUTPUT_D):
+    def __init__(self, train_data, INPUT_D, OUTPUT_D, test=False):
         super(AnchorNet, self).__init__()
+
+        #hard code values for testing purposes
+        if test == True:
+            self.anchors = nn.Parameter(torch.ones(OUTPUT_D, INPUT_D).type(torch.FloatTensor))
+            self.biases = torch.ones(OUTPUT_D)
+            return
+
 
         self.anchors = nn.Parameter(torch.randn(OUTPUT_D, INPUT_D).type(torch.FloatTensor))
 
@@ -37,19 +45,6 @@ class EmbeddingNet(nn.Module):
 
     def forward(self, x):
         return self.embedding(x)
-
-    def get_embedding(self, x):
-        return self.forward(x)
-
-
-class EmbeddingNetL2(EmbeddingNet):
-    def __init__(self):
-        super(EmbeddingNetL2, self).__init__()
-
-    def forward(self, x):
-        output = super(EmbeddingNetL2, self).forward(x)
-        output /= output.pow(2).sum(1, keepdim=True).sqrt()
-        return output
 
     def get_embedding(self, x):
         return self.forward(x)
