@@ -1,27 +1,42 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+class AnchorNet(nn.Module):
 
-class EmbeddingNet(nn.Module):
-    def __init__(self):
-        super(EmbeddingNet, self).__init__()
-        self.convnet = nn.Sequential(nn.Conv2d(1, 32, 5), nn.PReLU(),
-                                     nn.MaxPool2d(2, stride=2),
-                                     nn.Conv2d(32, 64, 5), nn.PReLU(),
-                                     nn.MaxPool2d(2, stride=2))
+    def __init__(self, train_data, INPUT_D, OUTPUT_D):
+        super(AnchorNet, self).__init__()
 
-        self.fc = nn.Sequential(nn.Linear(64 * 4 * 4, 256),
-                                nn.PReLU(),
-                                nn.Linear(256, 256),
-                                nn.PReLU(),
-                                nn.Linear(256, 2)
-                                )
+        self.anchors = nn.Parameter(torch.randn(OUTPUT_D, INPUT_D).type(torch.FloatTensor))
+
+        # set biases to be mean of distance between points and anchors
+        aggregate = torch.zeros(OUTPUT_D)
+        for point in train_data:
+            w0 = torch.norm(point.t() - self.anchors, 2, 1)
+            aggregate += w0
+
+        self.biases = nn.Parameter((aggregate/train_data.shape[0]).reshape(-1, 1))
 
     def forward(self, x):
-        output = self.convnet(x)
-        output = output.view(output.size()[0], -1)
-        output = self.fc(output)
-        return output
+        return torch.norm(x.t() - anchors, 2, 1).reshape(-1, 1) - biases
+
+    def get_embedding(self, x):
+        return self.forward(x)
+
+    def extra_repr(self):
+        return 'anchors {}, biases {}'.format(self.anchors.shape, self.biases.shape)
+
+class EmbeddingNet(nn.Module):
+    def __init__(self, AnchorNet):
+        super(EmbeddingNet, self).__init__()
+
+        self.anchor_net = AnchorNet
+        self.embedding = nn.Sequential(
+            self.anchor_net,
+             nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.embedding(x)
 
     def get_embedding(self, x):
         return self.forward(x)
@@ -39,37 +54,6 @@ class EmbeddingNetL2(EmbeddingNet):
     def get_embedding(self, x):
         return self.forward(x)
 
-
-class ClassificationNet(nn.Module):
-    def __init__(self, embedding_net, n_classes):
-        super(ClassificationNet, self).__init__()
-        self.embedding_net = embedding_net
-        self.n_classes = n_classes
-        self.nonlinear = nn.PReLU()
-        self.fc1 = nn.Linear(2, n_classes)
-
-    def forward(self, x):
-        output = self.embedding_net(x)
-        output = self.nonlinear(output)
-        scores = F.log_softmax(self.fc1(output), dim=-1)
-        return scores
-
-    def get_embedding(self, x):
-        return self.nonlinear(self.embedding_net(x))
-
-
-class SiameseNet(nn.Module):
-    def __init__(self, embedding_net):
-        super(SiameseNet, self).__init__()
-        self.embedding_net = embedding_net
-
-    def forward(self, x1, x2):
-        output1 = self.embedding_net(x1)
-        output2 = self.embedding_net(x2)
-        return output1, output2
-
-    def get_embedding(self, x):
-        return self.embedding_net(x)
 
 
 class TripletNet(nn.Module):

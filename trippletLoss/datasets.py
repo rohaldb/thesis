@@ -43,6 +43,9 @@ class TripletAudio(Dataset):
             pos = self.test_data[self.test_triplet_indicies[index][1]]
             neg = self.test_data[self.test_triplet_indicies[index][2]]
 
+        # ensure the pos is closer to the point than the neg
+        assert( ((anchor-pos)**2).sum() - ((anchor-neg)**2).sum() < 0 )
+
         return (anchor.reshape(-1, 1), pos.reshape(-1, 1), neg.reshape(-1, 1))
 
 
