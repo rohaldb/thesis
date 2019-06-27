@@ -1,6 +1,8 @@
 import numpy as np
 from PIL import Image
-
+from random import randint
+import torch
+import pandas as pd
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import BatchSampler
 
@@ -11,49 +13,42 @@ class TripletAudio(Dataset):
     Test: Creates fixed triplets for testing
     """
 
-    def __init__(self):
-        # read in relevant data
-        train_data = torch.from_numpy(np.loadtxt('data/trainData.txt', dtype=np.float32))
-        test_data = torch.from_numpy(np.loadtxt('data/valData.txt', dtype=np.float32))
-        trainKNN = pd.read_csv('data/trainKNN.csv', index_col=0)
-        testKNN = pd.read_csv('data/valKNN.csv', index_col=0)
-
-        K = 5 #num KNN we consider positive
-        MAX_CLOSE_NEG = 15
-        MAX_NEG = 15
-
-        self.train_data = train_data
-        self.test_data = test_data
-        self.trainKNN = trainKNN
-        self.valKNN = valKNN
-        self.negIndicies = list(range(K,K + MAX_CLOSE_NEG) + list(-MAX_NEG,-1)) #comibne close and far neg indicies
+    def __init__(self, train, K, MAX_CLOSE_NEG, MAX_NEG):
+        #comibne close and far neg indicies
+        self.K = K
+        self.neg_indicies = list(range(K+1,K + MAX_CLOSE_NEG)) + list(range(-MAX_NEG,-1))
+        self.train = train
 
         if self.train:
-            pass # no precomputation needed for train
+            self.train_data = torch.from_numpy(np.loadtxt('data/trainData.txt', dtype=np.float32))
+            self.train_KNN = pd.read_csv('data/trainKNN.csv', index_col=0)
         else:
-            #generate fixed trainin examples
-            self.test_triplets = [[
+            self.test_data = torch.from_numpy(np.loadtxt('data/valData.txt', dtype=np.float32))
+            self.test_KNN = pd.read_csv('data/valKNN.csv', index_col=0)
+            #generate fixed trainin examples (indicies)
+            self.test_triplet_indicies = [[
                     index,
-                    test_data[testKNN.iloc[index][randint(0, K)]].reshape(-1, 1) #pos
-                    test_data[testKNN.iloc[index][np.random.choice(self.negIndicies)]].reshape(-1, 1) #neg
-                ] for index in range(0,test_data.shape[0])]
+                    self.test_KNN.iloc[index][randint(0, K)], #pos
+                    self.test_KNN.iloc[index][np.random.choice(self.neg_indicies)] #neg
+                ] for index in range(0, self.test_data.shape[0])]
 
 
     def __getitem__(self, index):
         if self.train:
-            anchor = train_data[trainKNN.iloc[index]]
-            pos = train_data[trainKNN.iloc[index][randint(0, K)]].reshape(-1, 1) #pos
-            neg = train_data[trainKNN.iloc[index][np.random.choice(self.negIndicies)]].reshape(-1, 1) #neg
+            anchor = self.train_data[index]
+            pos = self.train_data[self.train_KNN.iloc[index][randint(0, self.K)]]
+            neg = self.train_data[self.train_KNN.iloc[index][np.random.choice(self.neg_indicies)]]
         else:
-            anch = self.test_data[self.test_triplets[index][0]]
-            pos = self.test_data[self.test_triplets[index][1]]
-            neg = self.test_data[self.test_triplets[index][2]]
+            anchor = self.test_data[self.test_triplet_indicies[index][0]]
+            pos = self.test_data[self.test_triplet_indicies[index][1]]
+            neg = self.test_data[self.test_triplet_indicies[index][2]]
 
-        return (anchor, pos, neg)
+        return (anchor.reshape(-1, 1), pos.reshape(-1, 1), neg.reshape(-1, 1))
 
 
     def __len__(self):
-        return len(self.test_triplets) + len(self.test_data) # is this right?
+        return self.train_KNN.shape[0] if self.train else self.test_KNN.shape[0]
+
 
 
 class BalancedBatchSampler(BatchSampler):
