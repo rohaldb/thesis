@@ -13,10 +13,10 @@ class TripletAudio(Dataset):
     Test: Creates fixed triplets for testing
     """
 
-    def __init__(self, train, K, MAX_CLOSE_NEG, MAX_NEG):
+    def __init__(self, train, K, MAX_CLOSE_NEG, MAX_FAR_NEG):
         #comibne close and far neg indicies
         self.K = K
-        self.neg_indicies = list(range(K+1,K + MAX_CLOSE_NEG)) + list(range(-MAX_NEG,-1))
+        self.neg_indicies = list(range(K+1,K + MAX_CLOSE_NEG)) + list(range(-MAX_FAR_NEG,-1))
         self.train = train
 
         if self.train:
@@ -32,6 +32,11 @@ class TripletAudio(Dataset):
                     self.test_KNN.iloc[index][np.random.choice(self.neg_indicies)] #neg
                 ] for index in range(0, self.test_data.shape[0])]
 
+    def get_dataset(self):
+        if self.train:
+            return self.train_data
+        else:
+            return self.test_data
 
     def __getitem__(self, index):
         if self.train:
