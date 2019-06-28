@@ -26,11 +26,11 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
         for metric in metrics:
             message += '\t{}: {}'.format(metric.name(), metric.value())
 
-        val_loss, metrics = test_epoch(val_loader, model, loss_fn, cuda, metrics)
-        val_loss /= len(val_loader)
-
-        message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
-                                                                                 val_loss)
+        # val_loss, metrics = test_epoch(val_loader, model, loss_fn, cuda, metrics)
+        # val_loss /= len(val_loader)
+        #
+        # message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
+                                                                                 # val_loss)
         for metric in metrics:
             message += '\t{}: {}'.format(metric.name(), metric.value())
 
@@ -45,28 +45,18 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
     losses = []
     total_loss = 0
 
-    for batch_idx, (data, target) in enumerate(train_loader):
-        target = target if len(target) > 0 else None
-        if not type(data) in (tuple, list):
-            data = (data,)
-        if cuda:
-            data = tuple(d.cuda() for d in data)
-            if target is not None:
-                target = target.cuda()
+    for batch_idx, triplet in enumerate(train_loader):
 
 
         optimizer.zero_grad()
-        outputs = model(*data)
+        outputs = model(*triplet)
+
+        print(triplet[0])
 
         if type(outputs) not in (tuple, list):
             outputs = (outputs,)
 
-        loss_inputs = outputs
-        if target is not None:
-            target = (target,)
-            loss_inputs += target
-
-        loss_outputs = loss_fn(*loss_inputs)
+        loss_outputs = loss_fn(*outputs)
         loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
         losses.append(loss.item())
         total_loss += loss.item()
@@ -78,7 +68,7 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
 
         if batch_idx % log_interval == 0:
             message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                batch_idx * len(data[0]), len(train_loader.dataset),
+                batch_idx * len(triplet[0]), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), np.mean(losses))
             for metric in metrics:
                 message += '\t{}: {}'.format(metric.name(), metric.value())

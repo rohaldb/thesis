@@ -17,15 +17,16 @@ class AnchorNet(nn.Module):
         self.anchors = nn.Parameter(torch.randn(OUTPUT_D, INPUT_D).type(torch.FloatTensor))
 
         # set biases to be mean of distance between points and anchors
-        aggregate = torch.zeros(OUTPUT_D)
-        for point in train_data:
-            w0 = torch.norm(point.t() - self.anchors, 2, 1)
-            aggregate += w0
+        batched_train = train_data.unsqueeze(-1).reshape(-1,train_data.shape[0],1)
+        self.biases =  nn.Parameter(anchor_dist(batched_train).mean(0))
 
-        self.biases = nn.Parameter((aggregate/train_data.shape[0]).reshape(-1, 1))
+    def anchor_dist(self, x):
+        batch_size = x.shape[0]
+        t = x.reshape(batch_size, 1, -1) #perform transpose within each batch
+        return torch.norm(t - self.anchors, 2, 2).unsqueeze(-1) #ensure return shape is batch x output x 1
 
     def forward(self, x):
-        return torch.norm(x.t() - self.anchors, 2, 1).reshape(-1, 1) - self.biases
+        return self.anchor_dist(x) - self.biases
 
     def get_embedding(self, x):
         return self.forward(x)
