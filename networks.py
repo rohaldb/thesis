@@ -17,8 +17,8 @@ class AnchorNet(nn.Module):
         self.anchors = nn.Parameter(torch.randn(OUTPUT_D, INPUT_D).type(torch.FloatTensor))
 
         # set biases to be mean of distance between points and anchors
-        batched_train = train_data.unsqueeze(-1).reshape(-1,train_data.shape[0],1)
-        self.biases =  nn.Parameter(anchor_dist(batched_train).mean(0))
+        batched_train = train_data.unsqueeze(-1)
+        self.biases =  nn.Parameter(self.anchor_dist(batched_train).mean(0))
 
     def anchor_dist(self, x):
         batch_size = x.shape[0]

@@ -26,11 +26,11 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
         for metric in metrics:
             message += '\t{}: {}'.format(metric.name(), metric.value())
 
-        # val_loss, metrics = test_epoch(val_loader, model, loss_fn, cuda, metrics)
-        # val_loss /= len(val_loader)
-        #
-        # message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
-                                                                                 # val_loss)
+        val_loss, metrics = test_epoch(val_loader, model, loss_fn, cuda, metrics)
+        val_loss /= len(val_loader)
+
+        message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
+                                                                                 val_loss)
         for metric in metrics:
             message += '\t{}: {}'.format(metric.name(), metric.value())
 
@@ -47,11 +47,8 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
 
     for batch_idx, triplet in enumerate(train_loader):
 
-
         optimizer.zero_grad()
         outputs = model(*triplet)
-
-        print(triplet[0])
 
         if type(outputs) not in (tuple, list):
             outputs = (outputs,)
@@ -76,6 +73,7 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
             print(message)
             losses = []
 
+
     total_loss /= (batch_idx + 1)
     return total_loss, metrics
 
@@ -84,27 +82,18 @@ def test_epoch(val_loader, model, loss_fn, cuda, metrics):
     with torch.no_grad():
         for metric in metrics:
             metric.reset()
+
         model.eval()
         val_loss = 0
-        for batch_idx, (data, target) in enumerate(val_loader):
-            target = target if len(target) > 0 else None
-            if not type(data) in (tuple, list):
-                data = (data,)
-            if cuda:
-                data = tuple(d.cuda() for d in data)
-                if target is not None:
-                    target = target.cuda()
 
-            outputs = model(*data)
+        for batch_idx, triplet in enumerate(val_loader):
+
+            outputs = model(*triplet)
 
             if type(outputs) not in (tuple, list):
                 outputs = (outputs,)
-            loss_inputs = outputs
-            if target is not None:
-                target = (target,)
-                loss_inputs += target
 
-            loss_outputs = loss_fn(*loss_inputs)
+            loss_outputs = loss_fn(*outputs)
             loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
             val_loss += loss.item()
 
