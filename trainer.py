@@ -53,21 +53,33 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
     losses = []
     total_loss = 0
 
-    for batch_idx, triplet in enumerate(train_loader):
+    for batch_idx, (data, target) in enumerate(train_loader):
+        target = target if len(target) > 0 else None
+        if not type(data) in (tuple, list):
+            data = (data,)
+        if cuda:
+            data = tuple(d.cuda() for d in data)
+            if target is not None:
+                target = target.cuda()
+
 
         optimizer.zero_grad()
-        outputs = model(*triplet)
+        outputs = model(*data)
 
         if type(outputs) not in (tuple, list):
             outputs = (outputs,)
 
-        loss_outputs = loss_fn(*outputs)
+        loss_inputs = outputs
+        if target is not None:
+            target = (target,)
+            loss_inputs += target
+
+        loss_outputs = loss_fn(*loss_inputs)
         loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
         losses.append(loss.item())
         total_loss += loss.item()
         loss.backward()
         optimizer.step()
-
 
         for metric in metrics:
             metric(outputs, target, loss_outputs)
@@ -75,11 +87,9 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
         if batch_idx % log_interval == 0:
             writer_train_index += log_interval
             writer.add_scalar("train_loss", np.mean(losses), writer_train_index)
-
             message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                batch_idx * len(triplet[0]), len(train_loader.dataset),
+                batch_idx * len(data[0]), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), np.mean(losses))
-
             for metric in metrics:
                 message += '\t{}: {}'.format(metric.name(), metric.value())
 
@@ -87,27 +97,34 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
             losses = []
 
     total_loss /= (batch_idx + 1)
-    writer.close()
-
-    return total_loss, metrics, writer_train_index
+    return total_loss, metrics
 
 
 def test_epoch(val_loader, model, loss_fn, cuda, metrics):
     with torch.no_grad():
         for metric in metrics:
             metric.reset()
-
         model.eval()
         val_loss = 0
+        for batch_idx, (data, target) in enumerate(val_loader):
+            target = target if len(target) > 0 else None
+            if not type(data) in (tuple, list):
+                data = (data,)
+            if cuda:
+                data = tuple(d.cuda() for d in data)
+                if target is not None:
+                    target = target.cuda()
 
-        for batch_idx, triplet in enumerate(val_loader):
-
-            outputs = model(*triplet)
+            outputs = model(*data)
 
             if type(outputs) not in (tuple, list):
                 outputs = (outputs,)
+            loss_inputs = outputs
+            if target is not None:
+                target = (target,)
+                loss_inputs += target
 
-            loss_outputs = loss_fn(*outputs)
+            loss_outputs = loss_fn(*loss_inputs)
             loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
             val_loss += loss.item()
 

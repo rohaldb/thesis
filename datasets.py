@@ -51,7 +51,7 @@ class TripletAudio(Dataset):
         # ensure the pos is closer to the point than the neg
         assert( ((anchor-pos)**2).sum() - ((anchor-neg)**2).sum() < 0 )
 
-        return (anchor.reshape(-1, 1), pos.reshape(-1, 1), neg.reshape(-1, 1))
+        return (anchor.reshape(-1, 1), pos.reshape(-1, 1), neg.reshape(-1, 1)), [] #important to return [] here
 
 
     def __len__(self):
@@ -70,7 +70,6 @@ class AudioTrainDataset(Dataset):
         self.K = K
 
     def __getitem__(self, index):
-        return self.data[index]
 
     def __len__(self):
         return self.KNN.shape[0]
@@ -87,12 +86,9 @@ class AudioTestDataset(Dataset):
         self.K = K
 
     def __getitem__(self, index):
-        return self.data[index]
 
     def __len__(self):
         return self.KNN.shape[0]
-
-
 
 class BalancedBatchSampler(BatchSampler):
     """
@@ -109,9 +105,9 @@ class BalancedBatchSampler(BatchSampler):
         self.n_far_neg = 10
 
         self.batch_size = self.n_anchors * (self.n_pos + self.n_close_neg + self.n_far_neg)
-        self.anchor_indicies = np.copy(self.KNN.index.values)
+        self.anchor_indicies = np.copy(self.dataset.KNN.index.values)
         np.random.shuffle(self.anchor_indicies) #shuffle so we get random anchors
-        self.n_dataset = self.KNN.shape[0]
+        self.n_dataset = self.dataset.KNN.shape[0]
         self.used_anchors = 0 #counter to move along the anchor indicies list
 
     def __iter__(self):
@@ -127,9 +123,9 @@ class BalancedBatchSampler(BatchSampler):
             batch.update(batch_anchor_indicies)
             # add some pos and neg points to the batch
             for anchor_index in batch_anchor_indicies:
-                row = self.KNN.iloc[anchor_index]
-                batch.update(np.random.choice(row[0:self.K], self.n_pos, replace=False)) #add pos
-                batch.update(np.random.choice(row[self.K:], self.n_close_neg + self.n_far_neg, replace=False)) #add neg
+                row = self.dataset.KNN.iloc[anchor_index]
+                batch.update(np.random.choice(row[0:self.dataset.K], self.n_pos, replace=False)) #add pos
+                batch.update(np.random.choice(row[self.dataset.K:], self.n_close_neg + self.n_far_neg, replace=False)) #add neg
 
             #may have added duplicates in process. If so just fill indicies w random
             while len(batch) < self.batch_size:
@@ -138,7 +134,7 @@ class BalancedBatchSampler(BatchSampler):
 
             yield list(batch)
 
-        print(self.used_anchors, self.batch_size , self.n_dataset)
+        # print(self.used_anchors, self.batch_size , self.n_dataset)
 
     def __len__(self):
         return self.n_dataset // self.batch_size
