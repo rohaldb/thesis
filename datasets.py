@@ -51,7 +51,7 @@ class TripletAudio(Dataset):
         # ensure the pos is closer to the point than the neg
         assert( ((anchor-pos)**2).sum() - ((anchor-neg)**2).sum() < 0 )
 
-        return (anchor.reshape(-1, 1), pos.reshape(-1, 1), neg.reshape(-1, 1)), [] #important to return [] here
+        return (anchor.reshape(-1, 1), pos.reshape(-1, 1), neg.reshape(-1, 1)), [], index
 
 
     def __len__(self):
@@ -70,6 +70,7 @@ class AudioTrainDataset(Dataset):
         self.K = K
 
     def __getitem__(self, index):
+        return self.data[index].unsqueeze(-1), [], index
 
     def __len__(self):
         return self.KNN.shape[0]
@@ -86,6 +87,7 @@ class AudioTestDataset(Dataset):
         self.K = K
 
     def __getitem__(self, index):
+        return self.data[index].unsqueeze(-1), [], index
 
     def __len__(self):
         return self.KNN.shape[0]
@@ -103,7 +105,6 @@ class BalancedBatchSampler(BatchSampler):
         self.n_pos = 5
         self.n_close_neg = 10
         self.n_far_neg = 10
-
         self.batch_size = self.n_anchors * (self.n_pos + self.n_close_neg + self.n_far_neg)
         self.anchor_indicies = np.copy(self.dataset.KNN.index.values)
         np.random.shuffle(self.anchor_indicies) #shuffle so we get random anchors

@@ -23,7 +23,7 @@ class AnchorNet(nn.Module):
     def anchor_dist(self, x):
         batch_size = x.shape[0]
         t = x.reshape(batch_size, 1, -1) #perform transpose within each batch
-        return torch.norm(t - self.anchors, 2, 2).unsqueeze(-1) #ensure return shape is batch x output x 1
+        return torch.norm(t - self.anchors, 2, 2)#.unsqueeze(-1) #ensure return shape is batch x output x 1
 
     def forward(self, x):
         return self.anchor_dist(x) - self.biases

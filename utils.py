@@ -10,70 +10,6 @@ def pdist(vectors):
     return distance_matrix
 
 
-class PairSelector:
-    """
-    Implementation should return indices of positive pairs and negative pairs that will be passed to compute
-    Contrastive Loss
-    return positive_pairs, negative_pairs
-    """
-
-    def __init__(self):
-        pass
-
-    def get_pairs(self, embeddings, labels):
-        raise NotImplementedError
-
-
-class AllPositivePairSelector(PairSelector):
-    """
-    Discards embeddings and generates all possible pairs given labels.
-    If balance is True, negative pairs are a random sample to match the number of positive samples
-    """
-    def __init__(self, balance=True):
-        super(AllPositivePairSelector, self).__init__()
-        self.balance = balance
-
-    def get_pairs(self, embeddings, labels):
-        labels = labels.cpu().data.numpy()
-        all_pairs = np.array(list(combinations(range(len(labels)), 2)))
-        all_pairs = torch.LongTensor(all_pairs)
-        positive_pairs = all_pairs[(labels[all_pairs[:, 0]] == labels[all_pairs[:, 1]]).nonzero()]
-        negative_pairs = all_pairs[(labels[all_pairs[:, 0]] != labels[all_pairs[:, 1]]).nonzero()]
-        if self.balance:
-            negative_pairs = negative_pairs[torch.randperm(len(negative_pairs))[:len(positive_pairs)]]
-
-        return positive_pairs, negative_pairs
-
-
-class HardNegativePairSelector(PairSelector):
-    """
-    Creates all possible positive pairs. For negative pairs, pairs with smallest distance are taken into consideration,
-    matching the number of positive pairs.
-    """
-
-    def __init__(self, cpu=True):
-        super(HardNegativePairSelector, self).__init__()
-        self.cpu = cpu
-
-    def get_pairs(self, embeddings, labels):
-        if self.cpu:
-            embeddings = embeddings.cpu()
-        distance_matrix = pdist(embeddings)
-
-        labels = labels.cpu().data.numpy()
-        all_pairs = np.array(list(combinations(range(len(labels)), 2)))
-        all_pairs = torch.LongTensor(all_pairs)
-        positive_pairs = all_pairs[(labels[all_pairs[:, 0]] == labels[all_pairs[:, 1]]).nonzero()]
-        negative_pairs = all_pairs[(labels[all_pairs[:, 0]] != labels[all_pairs[:, 1]]).nonzero()]
-
-        negative_distances = distance_matrix[negative_pairs[:, 0], negative_pairs[:, 1]]
-        negative_distances = negative_distances.cpu().data.numpy()
-        top_negatives = np.argpartition(negative_distances, len(positive_pairs))[:len(positive_pairs)]
-        top_negative_pairs = negative_pairs[torch.LongTensor(top_negatives)]
-
-        return positive_pairs, top_negative_pairs
-
-
 class TripletSelector:
     """
     Implementation should return indices of anchors, positive and negative samples
@@ -130,6 +66,26 @@ def semihard_negative(loss_values, margin):
     return np.random.choice(semihard_negatives) if len(semihard_negatives) > 0 else None
 
 
+# def similarity_calculator(indicies, KNN):
+#     similarity = np.zeros([indicies.shape[0],indicies.shape[0]])
+#     for i1, anchor_index in enumerate(indicies):
+#         for i2, point_index in enumerate(indicies):
+#             if anchor_index == point_index:
+#                 similarity[i1][i2] = 1 #this helps follow the structure of FunctionNegativeTripletSelectors body
+#                 continue
+#             similarity[i1][i2] = 1 if point_index.item() in KNN.iloc[anchor_index.item()][:5].values else 0
+#     return similarity
+
+def similarity_calculator(KNN, K):
+    size = KNN.shape[0]
+    similarity = np.zeros([size, size])
+    for anchor_index, row in KNN.iterrows():
+        similarity[anchor_index][anchor_index] = 1 #set it to a match with itself
+        for i in row[:K].values:
+            similarity[anchor_index][i] = 1
+    return similarity
+
+
 class FunctionNegativeTripletSelector(TripletSelector):
     """
     For each positive pair, takes the hardest negative sample (with the greatest triplet loss value) to create a triplet
@@ -138,44 +94,60 @@ class FunctionNegativeTripletSelector(TripletSelector):
     and return a negative index for that pair
     """
 
-    def __init__(self, margin, negative_selection_fn, cpu=True):
+    def __init__(self, margin, negative_selection_fn, KNN, cpu=True):
         super(FunctionNegativeTripletSelector, self).__init__()
         self.cpu = cpu
         self.margin = margin
         self.negative_selection_fn = negative_selection_fn
+        self.similarity = similarity_calculator(KNN, 5)
 
-    def get_triplets(self, embeddings, labels):
+    def get_triplets(self, embeddings, indicies):
         if self.cpu:
             embeddings = embeddings.cpu()
         distance_matrix = pdist(embeddings)
         distance_matrix = distance_matrix.cpu()
-
-        labels = labels.cpu().data.numpy()
         triplets = []
+        import time
 
-        for label in set(labels):
-            label_mask = (labels == label)
-            label_indices = np.where(label_mask)[0]
-            if len(label_indices) < 2:
-                continue
+        for index in indicies:
+            global_pos_indicies = np.where(self.similarity[index])[0]
+            # print(index.item(), global_pos_indicies)
+            label_mask = [i.item() in global_pos_indicies for i in indicies]
+            label_indices = np.where(label_mask)[0] #get indicies of all entries which are KNN's
+            # print('label mask', label_mask, 'label indicies', label_indices)
+
             negative_indices = np.where(np.logical_not(label_mask))[0]
             anchor_positives = list(combinations(label_indices, 2))  # All anchor-positive pairs
             anchor_positives = np.array(anchor_positives)
+            # NOTE THAT ANCHOR_POS WILL DUPLICATE ACCROSS ITTERATIONS
+            # print('negative ind', negative_indices)
+            # print('anchor pos', anchor_positives)
 
-            ap_distances = distance_matrix[anchor_positives[:, 0], anchor_positives[:, 1]]
+            if len(anchor_positives) == 0: #if there are no positive points for this embedding
+                continue
+
+            ap_distances = distance_matrix[anchor_positives[:, 0], anchor_positives[:, 1]] #dist btw the each anchor pos pair
+
             for anchor_positive, ap_distance in zip(anchor_positives, ap_distances):
+                #compute triplet loss between anchor positive pair and all amchor neg pairs
                 loss_values = ap_distance - distance_matrix[torch.LongTensor(np.array([anchor_positive[0]])), torch.LongTensor(negative_indices)] + self.margin
                 loss_values = loss_values.data.cpu().numpy()
+                # print('loss values', loss_values)
                 hard_negative = self.negative_selection_fn(loss_values)
+                # print('hardest neg is', hard_negative)
                 if hard_negative is not None:
                     hard_negative = negative_indices[hard_negative]
                     triplets.append([anchor_positive[0], anchor_positive[1], hard_negative])
+            #         print('adding tripplet', [anchor_positive[0], anchor_positive[1], hard_negative])
+            # print('----------')
 
+        # i think this may fail in the case len(anchor_positives) is always 0
         if len(triplets) == 0:
+            print('len triplets was 0')
             triplets.append([anchor_positive[0], anchor_positive[1], negative_indices[0]])
 
         triplets = np.array(triplets)
-
+        # print(triplets)
         return torch.LongTensor(triplets)
 
 
@@ -189,6 +161,7 @@ def RandomNegativeTripletSelector(margin, cpu=False): return FunctionNegativeTri
                                                                                 cpu=cpu)
 
 
-def SemihardNegativeTripletSelector(margin, cpu=False): return FunctionNegativeTripletSelector(margin=margin,
+def SemihardNegativeTripletSelector(margin, KNN, cpu=False): return FunctionNegativeTripletSelector(margin=margin,
                                                                                   negative_selection_fn=lambda x: semihard_negative(x, margin),
+                                                                                  KNN = KNN,
                                                                                   cpu=cpu)

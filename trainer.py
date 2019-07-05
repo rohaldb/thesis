@@ -44,7 +44,6 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
     writer.close()
 
 
-
 def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics, writer, writer_train_index):
     for metric in metrics:
         metric.reset()
@@ -53,7 +52,7 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
     losses = []
     total_loss = 0
 
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for batch_idx, (data, target, index) in enumerate(train_loader):
         target = target if len(target) > 0 else None
         if not type(data) in (tuple, list):
             data = (data,)
@@ -62,24 +61,34 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
             if target is not None:
                 target = target.cuda()
 
-
         optimizer.zero_grad()
         outputs = model(*data)
 
         if type(outputs) not in (tuple, list):
             outputs = (outputs,)
 
+        # OFFLINE GEN
+        # loss_inputs = outputs
+        # if target is not None:
+        #     target = (target,)
+        #     loss_inputs += target
+        #
+        # loss_outputs = loss_fn(*loss_inputs)
+
+        # ONLINE GEN
         loss_inputs = outputs
-        if target is not None:
-            target = (target,)
-            loss_inputs += target
+        if index is not None:
+            index = (index,)
+            loss_inputs += index
 
         loss_outputs = loss_fn(*loss_inputs)
+
         loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
         losses.append(loss.item())
         total_loss += loss.item()
         loss.backward()
         optimizer.step()
+
 
         for metric in metrics:
             metric(outputs, target, loss_outputs)
