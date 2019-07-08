@@ -66,19 +66,10 @@ def semihard_negative(loss_values, margin):
     return np.random.choice(semihard_negatives) if len(semihard_negatives) > 0 else None
 
 
-# def similarity_calculator(indicies, KNN):
-#     similarity = np.zeros([indicies.shape[0],indicies.shape[0]])
-#     for i1, anchor_index in enumerate(indicies):
-#         for i2, point_index in enumerate(indicies):
-#             if anchor_index == point_index:
-#                 similarity[i1][i2] = 1 #this helps follow the structure of FunctionNegativeTripletSelectors body
-#                 continue
-#             similarity[i1][i2] = 1 if point_index.item() in KNN.iloc[anchor_index.item()][:5].values else 0
-#     return similarity
 
 def similarity_calculator(KNN, K):
     size = KNN.shape[0]
-    similarity = np.zeros([size, size])
+    similarity = np.zeros([size, size], dtype=bool)
     for anchor_index, row in KNN.iterrows():
         similarity[anchor_index][anchor_index] = 1 #set it to a match with itself
         for i in row[:K].values:
@@ -101,63 +92,60 @@ class FunctionNegativeTripletSelector(TripletSelector):
         self.negative_selection_fn = negative_selection_fn
         self.similarity = similarity_calculator(KNN, 5)
 
+    #returns true if i in j's KNN's or j in i's KNN's
+    def are_positive(self,i,j):
+        return self.similarity[i,j] | self.similarity[j,i]
+
+    def neg_indicies(self,i,j, indicies):
+        positives = set(np.where(self.similarity[i])[0]).union(np.where(self.similarity[j])[0])
+        return np.sort(np.array(list(set(indicies.tolist()) - positives)))
+
     def get_triplets(self, embeddings, indicies):
         if self.cpu:
             embeddings = embeddings.cpu()
         distance_matrix = pdist(embeddings)
         distance_matrix = distance_matrix.cpu()
+
         triplets = []
-        import time
+        raw_to_relative_index = {natural: relative for relative, natural in enumerate(indicies.tolist())}
+        raw_anchor_positives = np.array(list(combinations(indicies, 2))) #gen all pairs
+        raw_anchor_positives = raw_anchor_positives[self.are_positive(raw_anchor_positives[:,0],raw_anchor_positives[:,1])] #filter away negatives
+        raw_anchor_positives = [[x,y] if self.similarity[x,y] else [y,x] for x,y in raw_anchor_positives] #swap anchor and pos if needed
+        #replace raw index with relative index in indicies array
+        anchor_positives = np.array([[raw_to_relative_index[x], raw_to_relative_index[y]] for [x,y] in raw_anchor_positives])
 
-        for index in indicies:
-            global_pos_indicies = np.where(self.similarity[index])[0]
-            # print(index.item(), global_pos_indicies)
-            label_mask = [i.item() in global_pos_indicies for i in indicies]
-            label_indices = np.where(label_mask)[0] #get indicies of all entries which are KNN's
-            # print('label mask', label_mask, 'label indicies', label_indices)
+        ap_distances = distance_matrix[anchor_positives[:, 0], anchor_positives[:, 1]] #dist btw the each anchor pos pair
 
-            negative_indices = np.where(np.logical_not(label_mask))[0]
-            anchor_positives = list(combinations(label_indices, 2))  # All anchor-positive pairs
-            anchor_positives = np.array(anchor_positives)
-            # NOTE THAT ANCHOR_POS WILL DUPLICATE ACCROSS ITTERATIONS
-            # print('negative ind', negative_indices)
-            # print('anchor pos', anchor_positives)
+        for anchor_positive, raw_anchor_positive, ap_distance in zip(anchor_positives, raw_anchor_positives, ap_distances):
+            raw_negative_indices = self.neg_indicies(*raw_anchor_positive, indicies)
+            negative_indices = [raw_to_relative_index[x] for x in raw_negative_indices]
+            #compute triplet loss between anchor positive pair and all anchor neg pairs
+            loss_values = ap_distance - distance_matrix[torch.LongTensor(np.array([anchor_positive[0]])), torch.LongTensor(negative_indices)] + self.margin
+            loss_values = loss_values.data.cpu().numpy()
+            hard_negative = self.negative_selection_fn(loss_values)
 
-            if len(anchor_positives) == 0: #if there are no positive points for this embedding
-                continue
+            if hard_negative is not None:
+                hard_negative = negative_indices[hard_negative]
+                triplets.append([anchor_positive[0], anchor_positive[1], hard_negative])
 
-            ap_distances = distance_matrix[anchor_positives[:, 0], anchor_positives[:, 1]] #dist btw the each anchor pos pair
 
-            for anchor_positive, ap_distance in zip(anchor_positives, ap_distances):
-                #compute triplet loss between anchor positive pair and all amchor neg pairs
-                loss_values = ap_distance - distance_matrix[torch.LongTensor(np.array([anchor_positive[0]])), torch.LongTensor(negative_indices)] + self.margin
-                loss_values = loss_values.data.cpu().numpy()
-                # print('loss values', loss_values)
-                hard_negative = self.negative_selection_fn(loss_values)
-                # print('hardest neg is', hard_negative)
-                if hard_negative is not None:
-                    hard_negative = negative_indices[hard_negative]
-                    triplets.append([anchor_positive[0], anchor_positive[1], hard_negative])
-            #         print('adding tripplet', [anchor_positive[0], anchor_positive[1], hard_negative])
-            # print('----------')
-
-        # i think this may fail in the case len(anchor_positives) is always 0
+        # balanced batch_gen should prevent this from happening, but in case
         if len(triplets) == 0:
-            print('len triplets was 0')
             triplets.append([anchor_positive[0], anchor_positive[1], negative_indices[0]])
 
         triplets = np.array(triplets)
-        # print(triplets)
         return torch.LongTensor(triplets)
 
 
 def HardestNegativeTripletSelector(margin, cpu=False): return FunctionNegativeTripletSelector(margin=margin,
                                                                                  negative_selection_fn=hardest_negative,
+                                                                                 KNN = KNN,
                                                                                  cpu=cpu)
 
 
 def RandomNegativeTripletSelector(margin, cpu=False): return FunctionNegativeTripletSelector(margin=margin,
                                                                                 negative_selection_fn=random_hard_negative,
+                                                                                KNN = KNN,
                                                                                 cpu=cpu)
 
 
