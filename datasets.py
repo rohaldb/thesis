@@ -114,7 +114,7 @@ class BalancedBatchSampler(BatchSampler):
     def __iter__(self):
 
         self.used_anchors = 0
-
+        np.random.shuffle(self.anchor_indicies)
 
         while self.used_anchors + self.batch_size < self.n_dataset:
             batch = set() #set to ensure no duplicates

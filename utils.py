@@ -68,12 +68,14 @@ def semihard_negative(loss_values, margin):
 
 
 def similarity_calculator(KNN, K):
+    print('generating similarity matrix')
     size = KNN.shape[0]
     similarity = np.zeros([size, size], dtype=bool)
     for anchor_index, row in KNN.iterrows():
         similarity[anchor_index][anchor_index] = 1 #set it to a match with itself
         for i in row[:K].values:
             similarity[anchor_index][i] = 1
+    print('done')
     return similarity
 
 
@@ -131,6 +133,7 @@ class FunctionNegativeTripletSelector(TripletSelector):
 
         # balanced batch_gen should prevent this from happening, but in case
         if len(triplets) == 0:
+            print('no triplets found in batch')
             triplets.append([anchor_positive[0], anchor_positive[1], negative_indices[0]])
 
         triplets = np.array(triplets)
