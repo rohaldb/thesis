@@ -98,28 +98,37 @@ class FunctionNegativeTripletSelector(TripletSelector):
     def are_positive(self,i,j):
         return self.similarity[i,j] | self.similarity[j,i]
 
-    def neg_indicies(self,i,j, indicies):
-        positives = set(np.where(self.similarity[i])[0]).union(np.where(self.similarity[j])[0])
+    def neg_indicies(self,i, indicies):
+        positives = set(np.where(self.similarity[i])[0])
         return np.sort(np.array(list(set(indicies.tolist()) - positives)))
+
+    #generates positive pairs from all pairs
+    def positive_pairs(self, all_pairs):
+        positive_pairs = []
+        for (i,j) in all_pairs:
+            if self.similarity[i,j]:
+                positive_pairs.append((i,j))
+            if self.similarity[j,i]:
+                positive_pairs.append((j,i))
+        return positive_pairs
 
     def get_triplets(self, embeddings, indicies):
         if self.cpu:
             embeddings = embeddings.cpu()
         distance_matrix = pdist(embeddings)
         distance_matrix = distance_matrix.cpu()
-
+        
         triplets = []
         raw_to_relative_index = {natural: relative for relative, natural in enumerate(indicies.tolist())}
-        raw_anchor_positives = np.array(list(combinations(indicies, 2))) #gen all pairs
-        raw_anchor_positives = raw_anchor_positives[self.are_positive(raw_anchor_positives[:,0],raw_anchor_positives[:,1])] #filter away negatives
-        raw_anchor_positives = [[x,y] if self.similarity[x,y] else [y,x] for x,y in raw_anchor_positives] #swap anchor and pos if needed
+        all_pairs = np.array(list(combinations(indicies, 2))) #gen all pairs
+        raw_anchor_positives = self.positive_pairs(all_pairs)
         #replace raw index with relative index in indicies array
         anchor_positives = np.array([[raw_to_relative_index[x], raw_to_relative_index[y]] for [x,y] in raw_anchor_positives])
 
         ap_distances = distance_matrix[anchor_positives[:, 0], anchor_positives[:, 1]] #dist btw the each anchor pos pair
 
         for anchor_positive, raw_anchor_positive, ap_distance in zip(anchor_positives, raw_anchor_positives, ap_distances):
-            raw_negative_indices = self.neg_indicies(*raw_anchor_positive, indicies)
+            raw_negative_indices = self.neg_indicies(raw_anchor_positive[0], indicies)
             negative_indices = [raw_to_relative_index[x] for x in raw_negative_indices]
             #compute triplet loss between anchor positive pair and all anchor neg pairs
             loss_values = ap_distance - distance_matrix[torch.LongTensor(np.array([anchor_positive[0]])), torch.LongTensor(negative_indices)] + self.margin
@@ -129,7 +138,6 @@ class FunctionNegativeTripletSelector(TripletSelector):
             if hard_negative is not None:
                 hard_negative = negative_indices[hard_negative]
                 triplets.append([anchor_positive[0], anchor_positive[1], hard_negative])
-
 
         # balanced batch_gen should prevent this from happening, but in case
         if len(triplets) == 0:
