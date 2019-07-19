@@ -42,7 +42,7 @@ class EmbeddingNet(nn.Module):
         self.anchor_net = AnchorNet
         self.embedding = nn.Sequential(
             self.anchor_net,
-             nn.Sigmoid()
+             nn.Tanh()
         )
 
     def forward(self, x):

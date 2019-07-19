@@ -8,29 +8,51 @@ class Recall:
         self.num_cand = num_cand
         self.K = K
 
-    def calculate(self, data, model, query):
+    def calculate(self, data, model, queries, KNN, naive=True):
         self.model = model
         self.data = data
 
-        self.outputs = self.model(self.data).numpy()
-
+        self.outputs = self.model(self.data).detach().numpy()
+        print('done embedding data')
         self.code_len = self.outputs.shape[1]
         quantized_outputs = np.heaviside(self.outputs, 0).astype(int)
         self.bucket_hash = BucketHash()
         for i, x in enumerate(quantized_outputs):
-            self.bucket_hash.add(x, i) #hash[bucket].append(i)
+            self.bucket_hash.add(x, i) #hash[x].append(i)
+        print('done quantizing into', len(self.bucket_hash.hash.keys()), 'buckets')
 
-        for q in query:
-            items = self.top_k_items(q)
+        results = []
+        for index, q in enumerate(queries):
+            pred_knns = self.naive_top_k_items(q) if naive else self.top_k_items(q)
+            true_knns = KNN.iloc[index][0:self.K]
+            rresults.append(len(set(true_knns).intersection(set(pred_knns)))/len(true_knns)) #comute recall
 
-        return items
-        #compare to true values
+
+        return np.array(results)
+
+    def quantization_dist(self, query, bucket):
+        proj = self.model(query.unsqueeze(0)).detach().squeeze().numpy()
+        code = np.heaviside(proj, 0).astype(int)
+        return np.sum(np.logical_xor(code, bucket) * np.linalg.norm(proj))
+
+    #Naive QD ranking
+    def naive_top_k_items(self, query):
+        cand = [] #candidate set
+        sorted_buckets = sorted(self.bucket_hash.keys(), key=lambda bucket: self.quantization_dist(query, bucket)) #sort by QD
+        i = 0
+        M = self.bucket_hash.keys().shape[0] #num buckets
+        while len(cand) < self.num_cand and i < M:
+            cand.extend(self.bucket_hash.get(sorted_buckets[i]))
+            i += 1
+
+        cand = sorted(cand, key=lambda x: np.linalg.norm(self.data[x]-query))
+        return cand[0:self.K]
 
     #Generate-to-Probe QD Ranking
     def top_k_items(self, query):
         self.heap = []
         cand = [] #candidate set
-        proj = self.model(query.unsqueeze(0)).squeeze().numpy()
+        proj = self.model(query.unsqueeze(0)).detach().squeeze().numpy()
         code = np.heaviside(proj, 0).astype(int)
         i = 0
         sorted_proj, self.proj_map = self.sorted_to_proj_map(proj)
@@ -90,20 +112,16 @@ class Recall:
         return bucket
 
 
+#uses the buckets as keys for a hash. Does so by converting the np arrays to tuples which are hashable
 class BucketHash:
     def __init__(self):
         self.hash = defaultdict(list)
 
     def add(self, bucket, item):
-        key = self.bucket_to_key(bucket)
-        self.hash[key].append(item)
-
-    def bucket_to_key(self, bucket):
-        out = 0
-        for bit in bucket:
-            out = (out << 1) | bit
-        return out
+        self.hash[tuple(bucket)].append(item)
 
     def get(self, bucket):
-        key = self.bucket_to_key(bucket)
-        return self.hash[key]
+        return self.hash[tuple(bucket)]
+
+    def keys(self):
+        return np.array(list(self.hash.keys()))
