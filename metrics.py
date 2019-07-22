@@ -5,7 +5,7 @@ class Metric:
     def __init__(self):
         pass
 
-    def __call__(self, outputs, target, loss, data=None, model=None, queries=None, true_knns=None, indicies=None):
+    def __call__(self, outputs, target, loss):
         raise NotImplementedError
 
     def reset(self):
@@ -16,23 +16,6 @@ class Metric:
 
     def name(self):
         raise NotImplementedError
-
-class RecallMetric(Metric):
-    def __init__(self, num_cand, K):
-        self.recall = Recall(num_cand, K)
-        self.values = []
-
-    def __call__(self, outputs, target, loss, data, model, queries, true_knns, indicies):
-        self.values.extend(self.recall.calculate(data, model.embedding_net, queries, true_knns.iloc[indicies,:], False))
-
-    def reset(self):
-        self.values = []
-
-    def value(self):
-        return np.mean(self.values)
-
-    def name(self):
-        return 'Recall'
 
 class AccumulatedAccuracyMetric(Metric):
     """

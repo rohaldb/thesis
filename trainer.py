@@ -87,12 +87,10 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
         loss.backward()
         optimizer.step()
 
-        dataset = train_loader.dataset.get_dataset()
-        true_knns = train_loader.dataset.get_KNN()
+        for metric in metrics:
+            metric(outputs, target, loss_outputs)
 
         if batch_idx % log_interval == 0:
-            for metric in metrics:
-                metric(outputs, target, loss_outputs, dataset, model, data[0], true_knns, index)
             writer_train_index += log_interval
             writer.add_scalar("train_loss", np.mean(losses), writer_train_index)
             message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -146,9 +144,7 @@ def test_epoch(val_loader, model, loss_fn, cuda, metrics):
             loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
             val_loss += loss.item()
 
-            dataset = val_loader.dataset.get_dataset()
-            true_knns = val_loader.dataset.get_KNN()
             for metric in metrics:
-                metric(outputs, target, loss_outputs, dataset, model, data[0], true_knns, index)
+                metric(outputs, target, loss_outputs)
 
     return val_loss, metrics
