@@ -63,25 +63,23 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
 
         optimizer.zero_grad()
         outputs = model(*data)
-
         if type(outputs) not in (tuple, list):
             outputs = (outputs,)
 
-        # OFFLINE GEN
-        # loss_inputs = outputs
-        # if target is not None:
-        #     target = (target,)
-        #     loss_inputs += target
-        #
-        # loss_outputs = loss_fn(*loss_inputs)
-
-        # ONLINE GEN
+        #OFFLINE GEN
         loss_inputs = outputs
-        if index is not None:
-            index = (index,)
-            loss_inputs += index
+        if target is not None:
+            target = (target,)
+            loss_inputs += target
 
         loss_outputs = loss_fn(*loss_inputs)
+
+        # # ONLINE GEN
+        # loss_inputs = outputs
+        # if index is not None:
+        #     index = (index,)
+        #     loss_inputs += index
+        # loss_outputs = loss_fn(*loss_inputs)
 
         loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
         losses.append(loss.item())
@@ -89,10 +87,12 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
         loss.backward()
         optimizer.step()
 
-        for metric in metrics:
-            metric(outputs, target, loss_outputs)
+        dataset = train_loader.dataset.get_dataset()
+        true_knns = train_loader.dataset.get_KNN()
 
         if batch_idx % log_interval == 0:
+            for metric in metrics:
+                metric(outputs, target, loss_outputs, dataset, model, data[0], true_knns, index)
             writer_train_index += log_interval
             writer.add_scalar("train_loss", np.mean(losses), writer_train_index)
             message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -128,25 +128,27 @@ def test_epoch(val_loader, model, loss_fn, cuda, metrics):
             if type(outputs) not in (tuple, list):
                 outputs = (outputs,)
 
-            # OFFLINE GEN
-            # loss_inputs = outputs
-            # if target is not None:
-            #     target = (target,)
-            #     loss_inputs += target
-            #
-            # loss_outputs = loss_fn(*loss_inputs)
-
-            # ONLINE GEN
+            #OFFLINE GEN
             loss_inputs = outputs
-            if index is not None:
-                index = (index,)
-                loss_inputs += index
+            if target is not None:
+                target = (target,)
+                loss_inputs += target
 
             loss_outputs = loss_fn(*loss_inputs)
+
+            # # ONLINE GEN
+            # loss_inputs = outputs
+            # if index is not None:
+            #     index = (index,)
+            #     loss_inputs += index
+            # loss_outputs = loss_fn(*loss_inputs)
+
             loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
             val_loss += loss.item()
 
+            dataset = val_loader.dataset.get_dataset()
+            true_knns = val_loader.dataset.get_KNN()
             for metric in metrics:
-                metric(outputs, target, loss_outputs)
+                metric(outputs, target, loss_outputs, dataset, model, data[0], true_knns, index)
 
     return val_loss, metrics

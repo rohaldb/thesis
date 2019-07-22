@@ -12,20 +12,21 @@ class Recall:
         self.model = model
         self.data = data
 
+        print('embedding dataset')
         self.outputs = self.model(self.data).detach().numpy()
-        print('done embedding data')
         self.code_len = self.outputs.shape[1]
+        print("quantizing dataset")
         quantized_outputs = np.heaviside(self.outputs, 0).astype(int)
         self.bucket_hash = BucketHash()
         for i, x in enumerate(quantized_outputs):
-            self.bucket_hash.add(x, i) #hash[x].append(i)
+            self.bucket_hash.add(x, i) #hash[x].append(i)\
         print('done quantizing into', len(self.bucket_hash.hash.keys()), 'buckets')
 
         results = []
         for index, q in enumerate(queries):
             pred_knns = self.naive_top_k_items(q) if naive else self.top_k_items(q)
             true_knns = KNN.iloc[index][0:self.K]
-            rresults.append(len(set(true_knns).intersection(set(pred_knns)))/len(true_knns)) #comute recall
+            results.append(len(set(true_knns).intersection(set(pred_knns)))/len(true_knns)) #comute recall
 
 
         return np.array(results)
@@ -38,13 +39,19 @@ class Recall:
     #Naive QD ranking
     def naive_top_k_items(self, query):
         cand = [] #candidate set
+        print("sorting buckets by QD dist")
         sorted_buckets = sorted(self.bucket_hash.keys(), key=lambda bucket: self.quantization_dist(query, bucket)) #sort by QD
+        print("generating candidate set")
         i = 0
         M = self.bucket_hash.keys().shape[0] #num buckets
         while len(cand) < self.num_cand and i < M:
-            cand.extend(self.bucket_hash.get(sorted_buckets[i]))
+            items = self.bucket_hash.get(sorted_buckets[i])
+            if torch.all(torch.eq(self.data[items[0]], query)): #don't add the query if its in the dataset
+                cand.extend(items[1:])
+            else:
+                cand.extend(items)
             i += 1
-
+        print("sorting candidates by distance")
         cand = sorted(cand, key=lambda x: np.linalg.norm(self.data[x]-query))
         return cand[0:self.K]
 
@@ -57,11 +64,13 @@ class Recall:
         i = 0
         sorted_proj, self.proj_map = self.sorted_to_proj_map(proj)
 
-        while len(cand) < self.num_cand and i < 2**self.code_len:
+        while len(cand) < self.num_cand and i < 1000:#2**self.code_len:
             b = self.generate_bucket(code, sorted_proj, i)
-            #need quick method to go from bucket to entry in bucket
             items = self.bucket_hash.get(b)
-            cand.extend(items)
+            if i == 0 and torch.all(torch.eq(self.data[items[0]], query)): #don't add the query if its in the dataset
+                cand.extend(items[1:])
+            else:
+                cand.extend(items)
             i += 1
 
         cand = sorted(cand, key=lambda x: np.linalg.norm(self.data[x]-query))
@@ -76,20 +85,21 @@ class Recall:
         if i == 0:
             to_add = np.zeros(self.code_len, dtype=int)
             to_add[0] = 1
-            heappush(self.heap, (abs(sorted_proj[0]), to_add))
+            heappush(self.heap, (abs(sorted_proj[0]), to_add.tolist()))
             sorted_flip = np.zeros(self.code_len, dtype=int)
         else:
             dist, sorted_flip  = heappop(self.heap)
+            sorted_flip = np.asarray(sorted_flip)
             j = np.where(sorted_flip == 1)[0][-1]
             if j < self.code_len-1:
                 sorted_flip_plus = np.copy(sorted_flip)
                 sorted_flip_plus[j+1] = 1
-                to_add = (self.dist(sorted_proj, sorted_flip) + sorted_proj[j+1], sorted_flip_plus)
-                heappush(self.heap, to_add)
+                to_add = (self.dist(sorted_proj, sorted_flip) + sorted_proj[j+1], sorted_flip_plus.tolist())
+                heappush(self.heap, to_add) #convert to list for tiebreaking in queue
                 sorted_flip_minus = np.copy(sorted_flip)
                 sorted_flip_minus[j] = 0
                 sorted_flip_minus[j+1] = 1
-                to_add = (self.dist(sorted_proj, sorted_flip) + sorted_proj[j+1] - sorted_proj[j], sorted_flip_minus)
+                to_add = (self.dist(sorted_proj, sorted_flip) + sorted_proj[j+1] - sorted_proj[j], sorted_flip_minus.tolist())
                 heappush(self.heap, to_add)
 
         return self.sorted_flip_to_bucket(sorted_flip, code)

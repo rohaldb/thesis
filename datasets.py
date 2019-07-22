@@ -38,6 +38,12 @@ class TripletAudio(Dataset):
         else:
             return self.test_data
 
+    def get_KNN(self):
+        if self.train:
+            return self.train_KNN
+        else:
+            return self.test_KNN
+
     def __getitem__(self, index):
         if self.train:
             anchor = self.train_data[index]
