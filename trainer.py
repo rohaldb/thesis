@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, metrics=[],
         start_epoch=0):
@@ -41,7 +41,9 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
 
         print(message)
 
+
     writer.close()
+    return train_loss, val_loss
 
 
 def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics, writer, writer_train_index):

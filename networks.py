@@ -7,6 +7,9 @@ class AnchorNet(nn.Module):
     def __init__(self, train_data, INPUT_D, OUTPUT_D, test=False):
         super(AnchorNet, self).__init__()
 
+        self.INPUT_D = INPUT_D
+        self.OUTPUT_D = OUTPUT_D
+
         #hard code values for testing purposes
         if test == True:
             self.anchors = nn.Parameter(torch.ones(OUTPUT_D, INPUT_D).type(torch.FloatTensor))
@@ -42,7 +45,9 @@ class EmbeddingNet(nn.Module):
         self.anchor_net = AnchorNet
         self.embedding = nn.Sequential(
             self.anchor_net,
-             nn.Tanh()
+            nn.Tanh(),
+            # nn.Linear(AnchorNet.OUTPUT_D, AnchorNet.OUTPUT_D),
+            # nn.Tanh()
         )
 
     def forward(self, x):

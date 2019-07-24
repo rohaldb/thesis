@@ -24,7 +24,6 @@ class Recall:
 
         results = []
         for index, q in enumerate(queries):
-            print(index)
             pred_knns = self.naive_top_k_items(q) if naive else self.top_k_items(q)
             true_knns = KNN.iloc[index][0:self.K]
             results.append(len(set(true_knns).intersection(set(pred_knns)))/len(true_knns)) #comute recall
