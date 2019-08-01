@@ -26,6 +26,7 @@ class Recall:
         for index, q in enumerate(queries):
             pred_knns = self.naive_top_k_items(q) if naive else self.top_k_items(q)
             true_knns = KNN.iloc[index][0:self.K]
+            # print(pred_knns)
             results.append(len(set(true_knns).intersection(set(pred_knns)))/len(true_knns)) #comute recall
 
 
@@ -46,12 +47,8 @@ class Recall:
         M = self.bucket_hash.keys().shape[0] #num buckets
         while len(cand) < self.num_cand and i < M:
             items = self.bucket_hash.get(sorted_buckets[i])
-            if torch.all(torch.eq(self.data[items[0]], query)): #don't add the query if its in the dataset
-                cand.extend(items[1:])
-            else:
-                cand.extend(items)
-            i += 1
-        print("sorting candidates by distance")
+            cand.extend(items)
+
         cand = sorted(cand, key=lambda x: np.linalg.norm(self.data[x]-query))
         return cand[0:self.K]
 
@@ -67,10 +64,7 @@ class Recall:
         while len(cand) < self.num_cand and i < 1000:#2**self.code_len:
             b = self.generate_bucket(code, sorted_proj, i)
             items = self.bucket_hash.get(b)
-            if i == 0 and torch.all(torch.eq(self.data[items[0]], query)): #don't add the query if its in the dataset
-                cand.extend(items[1:])
-            else:
-                cand.extend(items)
+            cand.extend(items)
             i += 1
 
         cand = sorted(cand, key=lambda x: np.linalg.norm(self.data[x]-query))

@@ -13,13 +13,14 @@ class TripletAudio(Dataset):
     Test: Creates fixed triplets for testing
     """
 
-    def __init__(self, train, K, MAX_CLOSE_NEG, MAX_FAR_NEG, P_STRONG_NEG):
+    def __init__(self, train, K, MAX_CLOSE_NEG, P_STRONG_NEG):
         #comibne close and far neg indicies
         self.K = K
-        #note randint is inclusive of params
-        self.neg_indicies = np.concatenate((np.arange(K,K + MAX_CLOSE_NEG), np.arange(-MAX_FAR_NEG,0)))
+        #note randint is inclusive of args
+        self.neg_indicies = np.arange(K+1,K+1 + MAX_CLOSE_NEG) #recall 0 is the element itself
         self.train = train
         self.p_strong_neg = P_STRONG_NEG
+        self.max_close_neg = MAX_CLOSE_NEG
 
         if self.train:
             self.train_data = torch.from_numpy(np.loadtxt('data/trainData.txt', dtype=np.float32))
@@ -27,14 +28,14 @@ class TripletAudio(Dataset):
         else:
             self.test_data = torch.from_numpy(np.loadtxt('data/valData.txt', dtype=np.float32))
             self.test_knn = pd.read_csv('data/valKNN.csv', index_col=0)
-            #generate fixed trainin examples (indicies)
+            #generate fixed training examples (indicies)
             self.test_triplet_indicies = [[
                     index,
-                    self.test_knn.iloc[index][randint(0, K-1)], #pos
+                    self.test_knn.iloc[index][randint(1, K)], #pos
                     self.weighted_neg_sampler(index, train=False)
                 ] for index in range(0, self.test_data.shape[0])]
 
-    #picks a strong negative (< MAX_CLOSE_NEG or > MAX_FAR_NEG) datapoint with prob p_strong_neg
+    #picks a strong negative (< MAX_CLOSE_NEG) datapoint with prob p_strong_neg
     def weighted_neg_sampler(self, row_index, train):
         knn = self.train_knn if train else self.test_knn
         data = self.train_data if train else self.test_data
@@ -44,7 +45,7 @@ class TripletAudio(Dataset):
         else:
             # weak neg
             neg_index = randint(0, data.shape[0]-1)
-            while neg_index in knn.iloc[row_index].values or neg_index == row_index:
+            while neg_index in knn.iloc[row_index][0:K+1+self.max_close_neg].values: #while its in strong negs or pos'
                 neg_index = randint(0, data.shape[0]-1)
             return neg_index
 
@@ -64,10 +65,13 @@ class TripletAudio(Dataset):
     def __getitem__(self, index):
         if self.train:
             anchor = self.train_data[index]
-            pos_index = self.train_knn.iloc[index][randint(0, self.K-1)]
+            pos_index = self.train_knn.iloc[index][randint(1, self.K)]
             pos = self.train_data[pos_index]
             neg_index = self.weighted_neg_sampler(index, True)
             neg = self.train_data[neg_index]
+
+            #assert the point itself is not included
+            assert (index != pos_index and index != neg_index)
         else:
             anchor = self.test_data[self.test_triplet_indicies[index][0]]
             pos = self.test_data[self.test_triplet_indicies[index][1]]
@@ -75,6 +79,7 @@ class TripletAudio(Dataset):
 
         # ensure the pos is closer to the point than the neg
         assert (np.linalg.norm(anchor-pos) - np.linalg.norm(anchor-neg)) <= 0, "index {0}, pos {1}, neg {2}".format(index, pos_index, neg_index)
+
 
         return (anchor.reshape(-1, 1), pos.reshape(-1, 1), neg.reshape(-1, 1)), [], index
 
