@@ -48,6 +48,7 @@ class Recall:
         while len(cand) < self.num_cand and i < M:
             items = self.bucket_hash.get(sorted_buckets[i])
             cand.extend(items)
+            i+=1
 
         cand = sorted(cand, key=lambda x: np.linalg.norm(self.data[x]-query))
         return cand[0:self.K]
