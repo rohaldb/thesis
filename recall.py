@@ -13,7 +13,7 @@ class Recall:
         self.data = data
 
         print('embedding dataset')
-        self.outputs = self.model(self.data).detach().numpy()
+        self.outputs = self.model.cpu()(self.data).detach().numpy #need to call .cpu first so that it doesnt use gpu
         self.code_len = self.outputs.shape[1]
         print("quantizing dataset")
         quantized_outputs = np.heaviside(self.outputs, 0).astype(int)
