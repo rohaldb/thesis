@@ -64,7 +64,7 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
                 target = target.cuda()
 
         optimizer.zero_grad()
-        outputs = model(*data)
+        outputs = model(*data,)
         if type(outputs) not in (tuple, list):
             outputs = (outputs,)
 
@@ -74,14 +74,7 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
             target = (target,)
             loss_inputs += target
 
-        loss_outputs = loss_fn(*loss_inputs)
-
-        # # ONLINE GEN
-        # loss_inputs = outputs
-        # if index is not None:
-        #     index = (index,)
-        #     loss_inputs += index
-        # loss_outputs = loss_fn(*loss_inputs)
+        loss_outputs = loss_fn(*loss_inputs, model)
 
         loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
         losses.append(loss.item())
@@ -135,13 +128,6 @@ def test_epoch(val_loader, model, loss_fn, cuda, metrics):
                 loss_inputs += target
 
             loss_outputs = loss_fn(*loss_inputs)
-
-            # # ONLINE GEN
-            # loss_inputs = outputs
-            # if index is not None:
-            #     index = (index,)
-            #     loss_inputs += index
-            # loss_outputs = loss_fn(*loss_inputs)
 
             loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
             val_loss += loss.item()

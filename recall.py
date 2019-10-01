@@ -130,3 +130,6 @@ class BucketHash:
 
     def keys(self):
         return np.array(list(self.hash.keys()))
+
+    def values(self):
+        return np.array(list(self.hash.values()))
