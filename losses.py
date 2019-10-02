@@ -20,10 +20,8 @@ class TripletLoss(nn.Module):
         distance_negative = (anchor - negative).pow(2).sum(1)  # .pow(.5)
         losses = F.relu(distance_positive - distance_negative + self.margin)
         
-
-        anchors = model.embedding_net.anchor_net.anchors
         #compute l2dist between all pairs of anchors
-        anchor_dists = torch.cdist(anchors, anchors)
+        anchor_dists = torch.cdist(model.embedding_net.anchor_net.anchors, model.embedding_net.anchor_net.anchors)
         t = (self.beta * F.relu(self.rho - anchor_dists))
         regularization = t.sum() - torch.diag(t).sum() #need to exclude diags from sum
         return regularization + losses.mean() if size_average else losses.sum()
