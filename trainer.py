@@ -21,10 +21,10 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
         scheduler.step()
 
     for epoch in range(start_epoch, n_epochs):
-        scheduler.step()
         # Train stage
         train_loss, metrics, writer_train_index = train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics, writer, writer_train_index)
-
+        scheduler.step()
+        
         message = 'Epoch: {}/{}. Train set: Average loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss)
         for metric in metrics:
             message += '\t{}: {}'.format(metric.name(), metric.value())
@@ -67,7 +67,7 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
         outputs = model(*data)
         if type(outputs) not in (tuple, list):
             outputs = (outputs,)
-
+            
         #OFFLINE GEN
         loss_inputs = outputs
         if target is not None:
@@ -76,19 +76,12 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
 
         loss_outputs = loss_fn(*loss_inputs)
 
-        # # ONLINE GEN
-        # loss_inputs = outputs
-        # if index is not None:
-        #     index = (index,)
-        #     loss_inputs += index
-        # loss_outputs = loss_fn(*loss_inputs)
-
         loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
         losses.append(loss.item())
         total_loss += loss.item()
         loss.backward()
         optimizer.step()
-
+        
         for metric in metrics:
             metric(outputs, target, loss_outputs)
 
@@ -135,13 +128,6 @@ def test_epoch(val_loader, model, loss_fn, cuda, metrics):
                 loss_inputs += target
 
             loss_outputs = loss_fn(*loss_inputs)
-
-            # # ONLINE GEN
-            # loss_inputs = outputs
-            # if index is not None:
-            #     index = (index,)
-            #     loss_inputs += index
-            # loss_outputs = loss_fn(*loss_inputs)
 
             loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
             val_loss += loss.item()
