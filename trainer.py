@@ -127,7 +127,7 @@ def test_epoch(val_loader, model, loss_fn, cuda, metrics):
                 target = (target,)
                 loss_inputs += target
 
-            loss_outputs = loss_fn(*loss_inputs)
+            loss_outputs = loss_fn(*loss_inputs, model)
 
             loss = loss_outputs[0] if type(loss_outputs) in (tuple, list) else loss_outputs
             val_loss += loss.item()
