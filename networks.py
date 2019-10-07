@@ -29,8 +29,8 @@ class AnchorNet(nn.Module):
             bias = np.percentile(torch.norm(center - data_in_cluster, 2, 1), 95) #95% to ignore outliers
             biases[i] = bias
 
-        self.anchors = nn.Parameter(anchors)
-        self.biases = nn.Parameter(torch.tensor(biases)).type(torch.FloatTensor)
+        self.anchors = nn.Parameter(anchors, requires_grad = True)
+        self.biases = nn.Parameter(torch.tensor(biases).type(torch.FloatTensor), requires_grad=True)
         print('done')
 
     def anchor_dist(self, x):
