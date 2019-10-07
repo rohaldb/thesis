@@ -1,6 +1,8 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
+import numpy as np
+from sklearn.cluster import MiniBatchKMeans
 
 class AnchorNet(nn.Module):
 
@@ -15,19 +17,26 @@ class AnchorNet(nn.Module):
             self.anchors = nn.Parameter(torch.ones(OUTPUT_D, INPUT_D).type(torch.FloatTensor))
             self.biases = torch.ones(OUTPUT_D)
             return
+    
+        print('Using kmeans++ to initialise model')
+        kmeans = MiniBatchKMeans(n_clusters=OUTPUT_D, random_state=0).fit(train_data)
+        anchors = torch.tensor(kmeans.cluster_centers_).type(torch.FloatTensor)
 
-        self.anchors = nn.Parameter(torch.randn(OUTPUT_D, INPUT_D).type(torch.FloatTensor))
+        biases = np.zeros(OUTPUT_D)
+        for i in range(0,OUTPUT_D):
+            center = anchors[i]
+            data_in_cluster = train_data[kmeans.labels_ == i]
+            bias = np.percentile(torch.norm(center - data_in_cluster, 2, 1), 95) #95% to ignore outliers
+            biases[i] = bias
 
-        print('initialising model biases')
-        # set biases to be mean of distance between points and anchors
-        batched_train = train_data.unsqueeze(-1)
-        self.biases =  nn.Parameter(self.anchor_dist(batched_train).mean(0))
+        self.anchors = nn.Parameter(anchors)
+        self.biases = nn.Parameter(torch.tensor(biases)).type(torch.FloatTensor)
         print('done')
 
     def anchor_dist(self, x):
         batch_size = x.shape[0]
         t = x.reshape(batch_size, 1, -1) #perform transpose within each batch
-        return torch.norm(t - self.anchors, 2, 2)#.unsqueeze(-1) #ensure return shape is batch x output x 1
+        return torch.norm(t - self.anchors, 2, 2) #ensure return shape is batch x output x 1
 
     def forward(self, x):
         return self.anchor_dist(x) - self.biases
