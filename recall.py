@@ -117,16 +117,27 @@ class Recall:
         return bucket
 
 
-#uses the buckets as keys for a hash. Does so by converting the np arrays to tuples which are hashable
+#uses the buckets as keys for a hash.
 class BucketHash:
     def __init__(self):
-        self.hash = defaultdict(list)
+        self.hash = {}
 
     def add(self, bucket, item):
-        self.hash[tuple(bucket)].append(item)
+        if hash(bucket) not in self.hash:
+            self.hash[hash(bucket)] = [item]
+        else:
+            self.hash[hash(bucket)].append(item)
 
     def get(self, bucket):
-        return self.hash[tuple(bucket)]
+        if hash(bucket) not in self.hash:
+            return []
+        return self.hash[hash(bucket)]
 
     def keys(self):
         return np.array(list(self.hash.keys()))
+
+    def values(self):
+        return np.array(list(self.hash.values()))
+    
+    def contains(self, item):
+        return hash(item) in self.hash
