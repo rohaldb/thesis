@@ -123,15 +123,15 @@ class BucketHash:
         self.hash = {}
 
     def add(self, bucket, item):
-        if hash(bucket) not in self.hash:
-            self.hash[hash(bucket)] = [item]
+        if tuple(bucket) not in self.hash:
+            self.hash[tuple(bucket)] = [item]
         else:
-            self.hash[hash(bucket)].append(item)
+            self.hash[tuple(bucket)].append(item)
 
     def get(self, bucket):
-        if hash(bucket) not in self.hash:
+        if tuple(bucket) not in self.hash:
             return []
-        return self.hash[hash(bucket)]
+        return self.hash[tuple(bucket)]
 
     def keys(self):
         return np.array(list(self.hash.keys()))
@@ -140,4 +140,4 @@ class BucketHash:
         return np.array(list(self.hash.values()))
     
     def contains(self, item):
-        return hash(item) in self.hash
+        return tuple(item) in self.hash

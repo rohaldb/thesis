@@ -14,8 +14,8 @@ class TripletLoss(nn.Module):
         self.margin = margin
 
     def forward(self, anchor, positive, negative, size_average=True):
-        distance_positive = torch.dist(anchor, positive, 2)#(anchor - positive).pow(2).sum(1).pow(0.5)
-        distance_negative = torch.dist(anchor, negative, 2)#(anchor - negative).pow(2).sum(1).pow(0.5)
+        distance_positive = (anchor - positive).pow(2).sum(1).pow(0.5) #torch.dist(anchor, positive, 2)
+        distance_negative = (anchor - negative).pow(2).sum(1).pow(0.5) #torch.dist(anchor, negative, 2)#
         losses = F.relu(distance_positive - distance_negative + self.margin)
         
         return losses.mean() if size_average else losses.sum()

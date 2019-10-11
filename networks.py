@@ -48,15 +48,12 @@ class AnchorNet(nn.Module):
         return 'anchors {}, biases {}'.format(self.anchors.shape, self.biases.shape)
 
 class EmbeddingNet(nn.Module):
-    def __init__(self, AnchorNet):
+    def __init__(self):
         super(EmbeddingNet, self).__init__()
 
-        self.anchor_net = AnchorNet
         self.embedding = nn.Sequential(
-            self.anchor_net,
-            nn.Tanh(),
-            # nn.Linear(AnchorNet.OUTPUT_D, AnchorNet.OUTPUT_D),
-            # nn.Tanh()
+            nn.Linear(192, 128),
+            nn.Tanh()
         )
 
     def forward(self, x):
