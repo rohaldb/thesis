@@ -53,7 +53,8 @@ class EmbeddingNet(nn.Module):
 
         self.embedding = nn.Sequential(
             nn.Linear(192, 128),
-            nn.Tanh()
+#             nn.Tanh()
+            2*nn.sigmoid()-1
         )
 
     def forward(self, x):
