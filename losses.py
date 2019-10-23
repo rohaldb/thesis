@@ -27,7 +27,6 @@ def log_wrapper(a):
 
 def deriv_triangle(d,l):
         delta = 0.1
-        print('deriv', d, l)
         if (l - delta) <= d < l:
             return 1/delta
         elif l <= d <= (l + delta):
@@ -62,7 +61,7 @@ class MutualInfoLoss(torch.autograd.Function):
         """
         anchor, hammings, membership = ctx.saved_tensors
         b = anchor.shape[1]
-        print('hammings', hammings)
+        
         #P(C = 1) and P(C = 0)
         p_c_0 = membership.sum().float()/membership.shape[0]
         p_c_1 = 1 - p_c_0
@@ -76,20 +75,12 @@ class MutualInfoLoss(torch.autograd.Function):
         hamming_hists = [torch.histc(x, bins=b+1, min=0, max=b) for x in hamming_variants]
         p_d, p_d_pos, p_d_neg = [x/x.sum() for x in hamming_hists]
         
-        print(p_d, p_d_pos, p_d_neg)
-        print('summing')
         derivative = 0
         for l in range(0,b+1):
             d_i_d_p_pos = p_c_1 * (log_wrapper(p_d_pos[l]) - log_wrapper(p_d[l])) 
-            print('first', p_c_1, log_wrapper(p_d_pos[l]), log_wrapper(p_d[l]), d_i_d_p_pos)
             d_p_pos_d_phi = -1./(2*pos_membership_card) * sum([deriv_triangle(x,l) for x in pos_hammings]) * anchor
-            print('second', d_p_pos_d_phi)
             d_i_d_p_neg = p_c_0 * (log_wrapper(p_d_neg[l]) - log_wrapper(p_d[l])) 
-            print('third', d_i_d_p_neg)
             d_p_neg_d_phi = -1/(2*neg_membership_card) * sum([deriv_triangle(x,l) for x in neg_hammings]) * anchor
-            print('fourth', d_p_neg_d_phi)
             derivative += d_i_d_p_pos*d_p_pos_d_phi + d_i_d_p_neg * d_p_neg_d_phi
-            print('fifth', d_i_d_p_pos,d_p_pos_d_phi,d_i_d_p_neg,d_p_neg_d_phi, derivative)
-            print('----------')
 
-        return torch.tensor([[-2.,  1.]]), None, None
+        return derivative, None, None

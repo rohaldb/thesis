@@ -53,8 +53,7 @@ class EmbeddingNet(nn.Module):
 
         self.embedding = nn.Sequential(
             nn.Linear(192, 128),
-#             nn.Tanh()
-            2*nn.sigmoid()-1
+            nn.Tanh()
         )
 
     def forward(self, x):
@@ -62,8 +61,6 @@ class EmbeddingNet(nn.Module):
 
     def get_embedding(self, x):
         return self.forward(x)
-
-
 
 class TripletNet(nn.Module):
     def __init__(self, embedding_net):
@@ -78,3 +75,26 @@ class TripletNet(nn.Module):
 
     def get_embedding(self, x):
         return self.embedding_net(x)
+
+
+class Hamming(nn.Module):
+    def __init__(self):
+        super(Hamming, self).__init__()
+
+    def forward(self, x):
+        sigmoid = nn.Sigmoid()
+        return 2*sigmoid(x)-1
+
+
+class HammingEmbed(nn.Module):
+    def __init__(self):
+        super(HammingEmbed, self).__init__()
+
+        hamming = Hamming()
+        self.embedding = nn.Sequential(
+            nn.Linear(192, 128),
+            hamming
+        )
+
+    def forward(self, x):
+        return self.embedding(x)

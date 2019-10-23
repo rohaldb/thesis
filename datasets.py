@@ -86,3 +86,67 @@ class TripletAudio(Dataset):
 
     def __len__(self):
         return self.train_knn.shape[0] if self.train else self.test_knn.shape[0]
+
+    
+
+class TrainPair(Dataset):
+    """
+    Training dataset
+    """
+
+    def __init__(self, K, pair_sample_size):
+        #comibne close and far neg indicies
+        self.data = torch.from_numpy(np.loadtxt('data/trainData.txt', dtype=np.float32))
+        self.KNN = pd.read_csv('data/trainKNN.csv', index_col=0)
+        self.K = K
+        self.pair_sample_size = pair_sample_size
+
+    def __getitem__(self, index):
+        pairs = self.data[self.KNN.iloc[index][:self.pair_sample_size]]
+        membership = np.append(torch.zeros(self.K), torch.ones(self.pair_sample_size - self.K))
+        return self.data[index], pairs, membership
+
+    def __len__(self):
+        return self.KNN.shape[0]
+    
+
+class TrainPair(Dataset):
+    """
+    Training dataset
+    """
+
+    def __init__(self, K, pair_sample_size):
+        #comibne close and far neg indicies
+        self.data = torch.from_numpy(np.loadtxt('data/trainData.txt', dtype=np.float32))
+        self.KNN = pd.read_csv('data/trainKNN.csv', index_col=0)
+        self.K = K
+        self.pair_sample_size = pair_sample_size
+
+    def __getitem__(self, index):
+        pairs = self.data[self.KNN.iloc[index][:self.pair_sample_size]]
+        membership = np.append(torch.zeros(self.K), torch.ones(self.pair_sample_size - self.K))
+        return self.data[index], pairs, membership
+
+    def __len__(self):
+        return self.KNN.shape[0]
+    
+    
+class TestPair(Dataset):
+    """
+    Training dataset
+    """
+
+    def __init__(self, K, pair_sample_size):
+        #comibne close and far neg indicies
+        self.data = torch.from_numpy(np.loadtxt('data/valData.txt', dtype=np.float32))
+        self.KNN = pd.read_csv('data/valKNN.csv', index_col=0)
+        self.K = K
+        self.pair_sample_size = pair_sample_size
+
+    def __getitem__(self, index):
+        pairs = self.data[self.KNN.iloc[index][:self.pair_sample_size]]
+        membership = np.append(torch.zeros(self.K), torch.ones(self.pair_sample_size - self.K))
+        return self.data[index], pairs, membership
+
+    def __len__(self):
+        return self.KNN.shape[0]
