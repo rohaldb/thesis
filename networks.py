@@ -87,12 +87,12 @@ class Hamming(nn.Module):
 
 
 class HammingEmbed(nn.Module):
-    def __init__(self):
+    def __init__(self, INPUT_D, OUTPUT_D):
         super(HammingEmbed, self).__init__()
 
         hamming = Hamming()
         self.embedding = nn.Sequential(
-            nn.Linear(192, 128),
+            nn.Linear(INPUT_D, OUTPUT_D),
             hamming
         )
 

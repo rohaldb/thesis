@@ -26,7 +26,7 @@ def log_wrapper(a):
     return 0 if a == 0 else a.log()
 
 def deriv_triangle(d,l):
-        delta = 0.1
+        delta = 0.25
         if (l - delta) <= d < l:
             return 1/delta
         elif l <= d <= (l + delta):
@@ -43,14 +43,19 @@ class MutualInfoLoss(torch.autograd.Function):
         a Tensor containing the output. ctx is a context object that can be used
         to stash information for backward computation. You can cache arbitrary
         objects for use in the backward pass using the ctx.save_for_backward method.
-        """        
+        """       
+        # TEMPORARY SOLN - REMOVES SINGLUAR BATCH DIM
+        pairs = pairs.squeeze(0)
+        membership = membership.squeeze(0)
+        #####
         b = anchor.shape[1]
         hammings = (b - (anchor * pairs).sum(1))/2
         ctx.save_for_backward(anchor, hammings, membership)
         hammings, membership = [x.detach().numpy() for x in [hammings, membership]]
         c_xy = np.histogram2d(hammings, membership, bins=[b+1,2], range=[[0,b], [0,1]])[0]
         mi = mutual_info_score(None, None, contingency=c_xy)
-        return torch.tensor(mi)
+        #negate since we want to maximise
+        return -1 * torch.tensor(mi) 
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -63,24 +68,24 @@ class MutualInfoLoss(torch.autograd.Function):
         b = anchor.shape[1]
         
         #P(C = 1) and P(C = 0)
-        p_c_0 = membership.sum().float()/membership.shape[0]
-        p_c_1 = 1 - p_c_0
         pos_membership_card = membership.sum().float()
         neg_membership_card = membership.shape[0] - pos_membership_card
+        p_c_1 = pos_membership_card/membership.shape[0]
+        p_c_0 = 1 - p_c_1
         
         pos_hammings = hammings[membership == 1]
         neg_hammings = hammings[membership == 0]
-        #need to get hamming dist distributions all inclusive
-        hamming_variants = hammings, pos_hammings, neg_hammings
+        #distributions of hamming distances pd, pd+, pd-
+        hamming_variants = [hammings, pos_hammings, neg_hammings]
         hamming_hists = [torch.histc(x, bins=b+1, min=0, max=b) for x in hamming_variants]
         p_d, p_d_pos, p_d_neg = [x/x.sum() for x in hamming_hists]
         
         derivative = 0
         for l in range(0,b+1):
             d_i_d_p_pos = p_c_1 * (log_wrapper(p_d_pos[l]) - log_wrapper(p_d[l])) 
-            d_p_pos_d_phi = -1./(2*pos_membership_card) * sum([deriv_triangle(x,l) for x in pos_hammings]) * anchor
+            d_p_pos_d_phi = -1./(2*pos_membership_card) * sum([deriv_triangle(d,l) for d in pos_hammings]) * anchor
             d_i_d_p_neg = p_c_0 * (log_wrapper(p_d_neg[l]) - log_wrapper(p_d[l])) 
-            d_p_neg_d_phi = -1/(2*neg_membership_card) * sum([deriv_triangle(x,l) for x in neg_hammings]) * anchor
+            d_p_neg_d_phi = -1/(2*neg_membership_card) * sum([deriv_triangle(d,l) for d in neg_hammings]) * anchor
             derivative += d_i_d_p_pos*d_p_pos_d_phi + d_i_d_p_neg * d_p_neg_d_phi
-
-        return derivative, None, None
+        #negate since we want to maximise
+        return -1*derivative, None, None

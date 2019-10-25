@@ -124,12 +124,12 @@ class TrainPair(Dataset):
 
     def __getitem__(self, index):
         pairs = self.data[self.KNN.iloc[index][:self.pair_sample_size]]
-        membership = np.append(torch.zeros(self.K), torch.ones(self.pair_sample_size - self.K))
+        membership = np.append(torch.ones(self.K), torch.zeros(self.pair_sample_size - self.K))
         return self.data[index], pairs, membership
+        
 
     def __len__(self):
-        return self.KNN.shape[0]
-    
+        return self.KNN.shape[0]    
     
 class TestPair(Dataset):
     """
@@ -145,7 +145,7 @@ class TestPair(Dataset):
 
     def __getitem__(self, index):
         pairs = self.data[self.KNN.iloc[index][:self.pair_sample_size]]
-        membership = np.append(torch.zeros(self.K), torch.ones(self.pair_sample_size - self.K))
+        membership = np.append(torch.ones(self.K), torch.zeros(self.pair_sample_size - self.K))
         return self.data[index], pairs, membership
 
     def __len__(self):
