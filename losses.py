@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import mutual_info_score
+from scipy.stats import entropy
+import math
 import numpy as np
 
 class TripletLoss(nn.Module):
@@ -52,9 +54,22 @@ class MutualInfoLoss(torch.autograd.Function):
         hammings = (b - (anchor * pairs).sum(1))/2
         ctx.save_for_backward(anchor.clone(), pairs.clone(), hammings, membership)
         hammings, membership = [x.detach().numpy() for x in [hammings, membership]]
-        c_xy = np.histogram2d(hammings, membership, bins=[b+1,2], range=[[0,b], [0,1]])[0]
-        mi = mutual_info_score(None, None, contingency=c_xy)
-        #negate since we want to maximise
+        
+        c_hc = np.histogram2d(hammings, membership, bins=[b+1,2], range=[[0,b], [0,1]])[0]
+        p_hc = c_hc/c_hc.sum()
+        p_h = p_hc.sum(1)
+        p_c = p_hc.sum(0)
+        h_c = entropy(p_c, base=2)
+        h_c_given_d = 0
+        for d in range (0,c_hc.shape[0]):
+            for c in range(0,c_hc.shape[1]):
+                joint = p_hc[d,c]
+                marg = p_h[d]
+                if joint == 0 or marg == 0:
+                    curr = 0
+                else:
+                    curr = -joint*math.log(joint/marg, 2)
+                h_c_given_d += curr
         return -1 * torch.tensor(mi) 
 
     @staticmethod
