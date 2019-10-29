@@ -26,10 +26,10 @@ def log_wrapper(a):
     return 0 if a == 0 else a.log()
 
 def deriv_triangle(d,l):
-        delta = 0.25
-        if (l - delta) <= d < l:
+        delta = 0.5
+        if (l - delta) < d < l:
             return 1/delta
-        elif l <= d <= (l + delta):
+        elif l <= d < (l + delta):
             return -1/delta
         else:
             return 0
@@ -50,7 +50,7 @@ class MutualInfoLoss(torch.autograd.Function):
         #####
         b = anchor.shape[1]
         hammings = (b - (anchor * pairs).sum(1))/2
-        ctx.save_for_backward(anchor, hammings, membership)
+        ctx.save_for_backward(anchor.clone(), pairs.clone(), hammings, membership)
         hammings, membership = [x.detach().numpy() for x in [hammings, membership]]
         c_xy = np.histogram2d(hammings, membership, bins=[b+1,2], range=[[0,b], [0,1]])[0]
         mi = mutual_info_score(None, None, contingency=c_xy)
@@ -64,7 +64,8 @@ class MutualInfoLoss(torch.autograd.Function):
         with respect to the output, and we need to compute the gradient of the loss
         with respect to the input.
         """
-        anchor, hammings, membership = ctx.saved_tensors
+        anchor, pairs, hammings, membership = ctx.saved_tensors
+        
         b = anchor.shape[1]
         
         #P(C = 1) and P(C = 0)
@@ -72,20 +73,22 @@ class MutualInfoLoss(torch.autograd.Function):
         neg_membership_card = membership.shape[0] - pos_membership_card
         p_c_1 = pos_membership_card/membership.shape[0]
         p_c_0 = 1 - p_c_1
-        
         pos_hammings = hammings[membership == 1]
         neg_hammings = hammings[membership == 0]
+        pos_pairs = pairs[membership == 1]
+        neg_pairs = pairs[membership == 0]
         #distributions of hamming distances pd, pd+, pd-
         hamming_variants = [hammings, pos_hammings, neg_hammings]
         hamming_hists = [torch.histc(x, bins=b+1, min=0, max=b) for x in hamming_variants]
         p_d, p_d_pos, p_d_neg = [x/x.sum() for x in hamming_hists]
         
+        
         derivative = 0
         for l in range(0,b+1):
-            d_i_d_p_pos = p_c_1 * (log_wrapper(p_d_pos[l]) - log_wrapper(p_d[l])) 
-            d_p_pos_d_phi = -1./(2*pos_membership_card) * sum([deriv_triangle(d,l) for d in pos_hammings]) * anchor
+            d_i_d_p_pos = p_c_1 * (log_wrapper(p_d_pos[l]) - log_wrapper(p_d[l]))
+            d_p_pos_d_phi = -1./(2*pos_membership_card) * torch.stack([deriv_triangle(d, l)*x for d,x in zip(pos_hammings, pos_pairs)]).sum(0)
             d_i_d_p_neg = p_c_0 * (log_wrapper(p_d_neg[l]) - log_wrapper(p_d[l])) 
-            d_p_neg_d_phi = -1/(2*neg_membership_card) * sum([deriv_triangle(d,l) for d in neg_hammings]) * anchor
+            d_p_neg_d_phi = -1./(2*neg_membership_card) * torch.stack([deriv_triangle(d, l)*x for d,x in zip(neg_hammings, neg_pairs)]).sum(0)
             derivative += d_i_d_p_pos*d_p_pos_d_phi + d_i_d_p_neg * d_p_neg_d_phi
         #negate since we want to maximise
-        return -1*derivative, None, None
+        return -1*derivative.unsqueeze(0), None, None

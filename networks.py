@@ -83,7 +83,7 @@ class Hamming(nn.Module):
 
     def forward(self, x):
         sigmoid = nn.Sigmoid()
-        return 2*sigmoid(x)-1
+        return 2*sigmoid(2*x)-1
 
 
 class HammingEmbed(nn.Module):
